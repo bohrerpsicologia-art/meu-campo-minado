@@ -361,8 +361,21 @@ function machineMove() {
 
     // IA decide usar bomba?
     if (powerups[1] > 0 && Math.random() < 0.15 && difficulty >= 3) {
-        // Encontrar uma área densa
-        let bestR = 8, bestC = 8;
+        // Encontrar uma área densa que pareça promissora (simples para o teste)
+        let bestR = 0, bestC = 0, maxHidden = -1;
+        // Amostragem simples para não travar o navegador
+        for (let i = 0; i < 10; i++) {
+            let tr = Math.floor(Math.random() * BOARD_SIZE);
+            let tc = Math.floor(Math.random() * BOARD_SIZE);
+            let hidden = 0;
+            for(let dr=-1; dr<=1; dr++){
+                for(let dc=-1; dc<=1; dc++){
+                    let nr=tr+dr, nc=tc+dc;
+                    if(nr>=0 && nr<BOARD_SIZE && nc>=0 && nc<BOARD_SIZE && !board[nr][nc].revealed) hidden++;
+                }
+            }
+            if(hidden > maxHidden) { maxHidden = hidden; bestR = tr; bestC = tc; }
+        }
         applyBigBomb(bestR, bestC);
         return;
     }
@@ -383,23 +396,48 @@ function machineMove() {
 }
 
 function getLogicalMove() {
-    // Procura por minas garantidas ou espaços seguros
-    // No Flags, queremos clicar em MINAS.
+    // Procura por minas garantidas. No Flags, queremos clicar em MINAS.
     for (let r = 0; r < BOARD_SIZE; r++) {
         for (let c = 0; c < BOARD_SIZE; c++) {
             if (board[r][c].revealed && !board[r][c].isMine) {
-                const count = countNeighborMines(r, c);
-                const neighbors = getNeighbors(r, c);
-                const hiddenNeighbors = neighbors.filter(n => !board[n.r][n.c].revealed);
-                const revealedMines = neighbors.filter(n => board[n.r][n.c].revealed && board[n.r][n.c].isMine).length;
+                const info = getTileLogicInfo(r, c);
 
-                // Se o número de vizinhos ocultos + minas já reveladas é igual ao número da célula,
-                // então todos os ocultos são minas!
-                if (hiddenNeighbors.length > 0 && (hiddenNeighbors.length + revealedMines === count)) {
-                    // IA nível alto clica na mina com certeza
-                    if (difficulty >= 4 || Math.random() < 0.7) {
-                        return hiddenNeighbors[0];
-                    }
+                // Lógica de Primeira Camada:
+                // Se vizinhos ocultos + minas reveladas == número da célula, todos os ocultos são minas!
+                if (info.hiddenNeighbors.length > 0 && (info.hiddenNeighbors.length + info.revealedMines === info.count)) {
+                    if (difficulty >= 4 || Math.random() < 0.7) return info.hiddenNeighbors[0];
+                }
+            }
+        }
+    }
+
+    // Lógica de Segunda Camada (Padrão 1-2-1):
+    // Se encontrarmos um padrão 1-2-1 na borda, o '1' central do padrão aponta para uma mina.
+    // Esta é uma implementação simplificada de análise de padrões para o nível Gênio.
+    if (difficulty === 5) {
+        return getPatternMove();
+    }
+
+    return null;
+}
+
+function getPatternMove() {
+    // Procura padrões horizontais/verticais simples (ex: 1-2-1)
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE - 2; c++) {
+            // Padrão 1-2-1 horizontal
+            const t1 = board[r][c], t2 = board[r][c+1], t3 = board[r][c+2];
+            if (t1.revealed && t2.revealed && t3.revealed && !t1.isMine && !t2.isMine && !t3.isMine) {
+                const c1 = countNeighborMines(r, c) - getTileLogicInfo(r, c).revealedMines;
+                const c2 = countNeighborMines(r, c+1) - getTileLogicInfo(r, c+1).revealedMines;
+                const c3 = countNeighborMines(r, c+2) - getTileLogicInfo(r, c+2).revealedMines;
+
+                if (c1 === 1 && c2 === 2 && c3 === 1) {
+                    // Em um 1-2-1, as minas estão na frente dos '1's
+                    // Tenta clicar na frente do primeiro '1'
+                    let neighbors = getNeighbors(r, c);
+                    let hidden = neighbors.find(n => !board[n.r][n.c].revealed);
+                    if (hidden) return hidden;
                 }
             }
         }
@@ -407,29 +445,64 @@ function getLogicalMove() {
     return null;
 }
 
+function getTileLogicInfo(r, c) {
+    const count = countNeighborMines(r, c);
+    const neighbors = getNeighbors(r, c);
+    const hiddenNeighbors = neighbors.filter(n => !board[n.r][n.c].revealed);
+    const revealedMines = neighbors.filter(n => board[n.r][n.c].revealed && board[n.r][n.c].isMine).length;
+    return { count, hiddenNeighbors, revealedMines };
+}
+
 function getGuessMove() {
     let availableTiles = [];
-    let mineTiles = [];
-
     for (let r = 0; r < BOARD_SIZE; r++) {
         for (let c = 0; c < BOARD_SIZE; c++) {
-            if (!board[r][c].revealed) {
-                availableTiles.push({r, c});
-                if (board[r][c].isMine) mineTiles.push({r, c});
-            }
+            if (!board[r][c].revealed) availableTiles.push({r, c});
         }
     }
 
     if (availableTiles.length === 0) return null;
 
-    // Nível 5 (Gênio): 60% de chance de acertar uma mina no "chute" se não houver lógica clara
-    if (difficulty === 5 && mineTiles.length > 0) {
-        if (Math.random() < 0.6) {
+    // Nível Gênio ou Alto: Filtrar quadrados que a lógica diz serem SEGUROS (sem mina)
+    // Se a IA clicar num seguro, ela perde a vez. Um gênio não faria isso se soubesse que é seguro.
+    if (difficulty >= 4) {
+        let logicalSafeTiles = new Set();
+        for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                // Analisa vizinhos de números revelados
+                if (board[r][c].revealed && !board[r][c].isMine) {
+                    const info = getTileLogicInfo(r, c);
+
+                    // Lógica 1: Se minas reveladas ao redor == número da célula,
+                    // ENTÃO todos os outros vizinhos ocultos são SEGUROS.
+                    if (info.revealedMines === info.count && info.hiddenNeighbors.length > 0) {
+                        info.hiddenNeighbors.forEach(n => {
+                            logicalSafeTiles.add(`${n.r}-${n.c}`);
+                        });
+                    }
+                }
+            }
+        }
+
+        // Remove os seguros da lista de chutes
+        let improvedChoices = availableTiles.filter(t => !logicalSafeTiles.has(`${t.r}-${t.c}`));
+
+        // Se após filtrar ainda houver opções, use as melhoradas.
+        // Se sobrar nada, a IA decide não chutar (passa o turno ou espera o timer) para não ser "burra"
+        if (improvedChoices.length < availableTiles.length) {
+            if (improvedChoices.length === 0) return null; // Não há chute seguro disponível
+            availableTiles = improvedChoices;
+        }
+    }
+
+    // Nível 5 (Gênio): 60% de chance de acertar uma mina no "chute" (entre os não-seguros)
+    if (difficulty === 5) {
+        let mineTiles = availableTiles.filter(t => board[t.r][t.c].isMine);
+        if (mineTiles.length > 0 && Math.random() < 0.6) {
             return mineTiles[Math.floor(Math.random() * mineTiles.length)];
         }
     }
 
-    // Ajuste de probabilidade por dificuldade
     // Nível 1: Erra muito (escolhe deliberadamente não-minas se possível)
     if (difficulty === 1) {
         let safeTiles = availableTiles.filter(t => !board[t.r][t.c].isMine);
@@ -438,7 +511,6 @@ function getGuessMove() {
         }
     }
 
-    // Padrão: aleatório
     return availableTiles[Math.floor(Math.random() * availableTiles.length)];
 }
 

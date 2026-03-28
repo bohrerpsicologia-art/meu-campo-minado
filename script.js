@@ -2,8 +2,8 @@
  * CONFIGURAÇÕES DO JOGO
  * Para expandir o jogo (ex: novos tamanhos de tabuleiro), altere estas constantes.
  */
-const BOARD_SIZE = 16;
-const MINES_COUNT = 51;
+let BOARD_SIZE = 16;
+let MINES_COUNT = 51;
 let minesLocation = [];
 let board = [];
 let scores = [0, 0];

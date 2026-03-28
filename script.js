@@ -13,6 +13,9 @@ let gameMode = 'pvp';
 let difficulty = 3;
 let powerups = [1, 1]; // Uma bomba grande para cada jogador
 let powerupActive = false;
+let turnTimer = null;
+let timeLeft = 60;
+let lastMoveTile = null;
 
 // Referências do DOM
 const boardElement = document.getElementById('board');
@@ -20,6 +23,7 @@ const score1Element = document.getElementById('score1');
 const score2Element = document.getElementById('score2');
 const turnIndicator = document.getElementById('turn-indicator');
 const minesLeftElement = document.getElementById('mines-left');
+const timerElement = document.getElementById('timer');
 const gameModeSelect = document.getElementById('game-mode');
 const difficultySelect = document.getElementById('difficulty');
 const newGameBtn = document.getElementById('new-game');
@@ -56,6 +60,7 @@ function setupGame() {
     gameOver = false;
     powerups = [1, 1];
     powerupActive = false;
+    lastMoveTile = null;
 
     // Atualizar UI
     score1Element.textContent = '0';
@@ -64,6 +69,7 @@ function setupGame() {
     minesLeftElement.textContent = `Minas: ${MINES_COUNT}`;
     updatePlayerPanels();
     updatePowerupButtons();
+    startTimer();
 
     // Criar tabuleiro lógico e visual
     boardElement.innerHTML = '';
@@ -76,6 +82,8 @@ function setupGame() {
             tile.id = `${r}-${c}`;
             tile.className = 'tile';
             tile.addEventListener('click', () => handleTileClick(r, c));
+            tile.addEventListener('mouseenter', () => handleTileHover(r, c));
+            tile.addEventListener('mouseleave', () => clearTileHovers());
             boardElement.appendChild(tile);
             row.push({
                 r, c,
@@ -101,6 +109,27 @@ function createMines() {
     }
 }
 
+function handleTileHover(r, c) {
+    if (!powerupActive || gameOver) return;
+    clearTileHovers();
+
+    // Destacar área 3x3
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            let nr = r + dr;
+            let nc = c + dc;
+            if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE) {
+                document.getElementById(`${nr}-${nc}`).classList.add('highlight-bomb');
+            }
+        }
+    }
+}
+
+function clearTileHovers() {
+    const tiles = document.querySelectorAll('.tile');
+    tiles.forEach(t => t.classList.remove('highlight-bomb'));
+}
+
 function handleTileClick(r, c) {
     if (gameOver) return;
 
@@ -115,11 +144,22 @@ function handleTileClick(r, c) {
     processMove(r, c);
 }
 
+function markLastMove(r, c) {
+    if (lastMoveTile && lastMoveTile.classList) {
+        lastMoveTile.classList.remove('last-move');
+    }
+    lastMoveTile = document.getElementById(`${r}-${c}`);
+    if (lastMoveTile) lastMoveTile.classList.add('last-move');
+}
+
 function processMove(r, c) {
     const tileData = board[r][c];
     tileData.revealed = true;
     const tileElement = document.getElementById(`${r}-${c}`);
     tileElement.classList.add('revealed');
+
+    markLastMove(r, c);
+    resetTimer();
 
     if (tileData.isMine) {
         // Encontrou uma mina!
@@ -132,7 +172,7 @@ function processMove(r, c) {
         const remainingMines = MINES_COUNT - (scores[0] + scores[1]);
         minesLeftElement.textContent = `Minas: ${remainingMines}`;
 
-        if (scores[0] + scores[1] === MINES_COUNT) {
+        if (checkEarlyWin() || scores[0] + scores[1] === MINES_COUNT) {
             endGame();
         } else {
             // No MSN Flags, quem acerta joga de novo.
@@ -154,6 +194,17 @@ function processMove(r, c) {
 
         switchTurn();
     }
+}
+
+function checkEarlyWin() {
+    const remainingMines = MINES_COUNT - (scores[0] + scores[1]);
+    const scoreDiff = Math.abs(scores[0] - scores[1]);
+
+    // Se a diferença for maior que as minas restantes, quem está na frente já venceu
+    if (scoreDiff > remainingMines) {
+        return true;
+    }
+    return false;
 }
 
 function revealEmptyCascade(r, c) {
@@ -181,9 +232,11 @@ function revealEmptyCascade(r, c) {
 }
 
 function switchTurn() {
+    if (gameOver) return;
     currentPlayer = currentPlayer === 0 ? 1 : 0;
     updatePlayerPanels();
     turnIndicator.textContent = `Vez do ${currentPlayer === 0 ? 'Azul' : 'Vermelho'}`;
+    resetTimer();
 
     if (gameMode === 'pve' && currentPlayer === 1 && !gameOver) {
         setTimeout(machineMove, 800);
@@ -237,8 +290,16 @@ function usePowerup(playerIndex) {
 
 function applyBigBomb(r, c) {
     powerupActive = false;
+    clearTileHovers();
     powerups[currentPlayer]--;
     updatePowerupButtons();
+    markLastMove(r, c);
+    resetTimer();
+
+    const btn1 = document.getElementById('btn-bomb-1');
+    const btn2 = document.getElementById('btn-bomb-2');
+    btn1.style.boxShadow = "";
+    btn2.style.boxShadow = "";
 
     // No MSN Flags, a bomba revela área e quem usou ganha os pontos.
     // É um item estratégico. Geralmente encerra o turno após o uso.
@@ -260,7 +321,7 @@ function applyBigBomb(r, c) {
     const remainingMines = MINES_COUNT - (scores[0] + scores[1]);
     minesLeftElement.textContent = `Minas: ${remainingMines}`;
 
-    if (scores[0] + scores[1] === MINES_COUNT) {
+    if (checkEarlyWin() || scores[0] + scores[1] === MINES_COUNT) {
         endGame();
     } else {
         switchTurn();
@@ -298,9 +359,12 @@ function updatePowerupButtons() {
 function machineMove() {
     if (gameOver || currentPlayer !== 1) return;
 
-    // Possibilidade de usar bomba grande (IA usa se encontrar área promissora ou apenas aleatoriamente em níveis altos)
-    if (powerups[1] > 0 && Math.random() < (difficulty * 0.1)) {
-        // IA decide usar bomba? Para simplificar, não usará por enquanto para focar na lógica de clique
+    // IA decide usar bomba?
+    if (powerups[1] > 0 && Math.random() < 0.15 && difficulty >= 3) {
+        // Encontrar uma área densa
+        let bestR = 8, bestC = 8;
+        applyBigBomb(bestR, bestC);
+        return;
     }
 
     let move = null;
@@ -393,12 +457,40 @@ function getNeighbors(r, c) {
     return neighbors;
 }
 
+function startTimer() {
+    clearInterval(turnTimer);
+    timeLeft = 60;
+    timerElement.textContent = timeLeft;
+    turnTimer = setInterval(() => {
+        if (gameOver) {
+            clearInterval(turnTimer);
+            return;
+        }
+        timeLeft--;
+        timerElement.textContent = timeLeft;
+        if (timeLeft <= 0) {
+            clearInterval(turnTimer);
+            handleTimeOut();
+        }
+    }, 1000);
+}
+
+function resetTimer() {
+    startTimer();
+}
+
+function handleTimeOut() {
+    if (gameOver) return;
+    switchTurn();
+}
+
 /**
  * FIM DE JOGO
  * GANCHO: Local ideal para exibir anúncios premiados ou botões de compartilhamento social.
  */
 function endGame() {
     gameOver = true;
+    clearInterval(turnTimer);
     let winner = "";
     let winnerId = -1;
 

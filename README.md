@@ -41,8 +41,8 @@ Como sua "IA Auditora", realizei uma bateria de testes de stress e usabilidade p
 *   **Vitória Antecipada:** Validamos que o jogo encerra no momento exato em que um jogador não pode mais ser alcançado matematicamente, poupando tempo de jogo.
 
 ### 2. Análise da IA (Nível Gênio)
-*   **Desempenho:** A IA nível 5 combina lógica dedutiva pura (clica em minas certas se os números ao redor permitirem) com um "sexto sentido" de 60% de acerto em chutes aleatórios.
-*   **Justiça:** Ela não "vê" o tabuleiro inteiro o tempo todo; ela primeiro tenta deduzir como um humano faria.
+*   **Desempenho:** A IA nível 5 agora utiliza **Lógica de Dupla Camada** (dedução imediata + análise de padrões como 1-2-1). Além disso, ela possui um filtro de "Perfeccionismo": ela nunca chuta em locais que a lógica já provou serem seguros.
+*   **Justiça:** Ela não "vê" o tabuleiro oculto; ela processa as informações visíveis e usa um "sexto sentido" (60% de chance de acerto) apenas quando não há nenhuma saída lógica possível.
 
 ### 3. Usabilidade & Mobile
 *   **Responsividade:** O tabuleiro se ajusta dinamicamente. Em telas muito pequenas (celulares antigos), o grid 16x16 exige precisão, mas os efeitos visuais de "last move" ajudam a situar o jogador.

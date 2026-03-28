@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campo Minado Flags - Estilo MSN</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Campo Minado <span class="neon-text">Flags</span></h1>
+        </header>
+
+        <div class="game-info">
+            <div id="player1-info" class="player-panel active">
+                <div class="player-name">AZUL</div>
+                <div class="score" id="score1">0</div>
+                <div class="powerup" id="powerup1">
+                    <button id="btn-bomb-1" class="bomb-btn" title="Bomba Grande (Revela 3x3)">⭐</button>
+                    <span class="count">1</span>
+                </div>
+            </div>
+
+            <div class="game-status">
+                <div id="turn-indicator">Vez do Azul</div>
+                <div id="mines-left">Minas: 51</div>
+            </div>
+
+            <div id="player2-info" class="player-panel">
+                <div class="player-name">VERMELHO</div>
+                <div class="score" id="score2">0</div>
+                <div class="powerup" id="powerup2">
+                    <button id="btn-bomb-2" class="bomb-btn" title="Bomba Grande (Revela 3x3)">⭐</button>
+                    <span class="count">1</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <select id="game-mode">
+                <option value="pvp">Humano vs Humano</option>
+                <option value="pve">Humano vs Máquina</option>
+            </select>
+            <select id="difficulty" style="display: none;">
+                <option value="1">Nível 1 (Fácil)</option>
+                <option value="2">Nível 2</option>
+                <option value="3">Nível 3</option>
+                <option value="4">Nível 4</option>
+                <option value="5">Nível 5 (Gênio)</option>
+            </select>
+            <button id="new-game">Novo Jogo</button>
+        </div>
+
+        <div id="board" class="board"></div>
+
+        <footer>
+            <p>Inspirado no MSN Messenger | Desenvolvido para Testes</p>
+        </footer>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

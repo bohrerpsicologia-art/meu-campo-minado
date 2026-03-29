@@ -1,0 +1,16 @@
+# Arquivos temporários e backups
+meu-campo-minado-main.zip
+.DS_Store
+Thumbs.db
+
+# Pastas de IDE e Sistemas
+.vscode/
+.idea/
+*.log
+node_modules/
+dist/
+build/
+
+# Antigravity Kit (Configuração local de sessão - OPCIONAL)
+# Como você pediu para enviar a pasta .agent, vamos manter ela FORA daqui.
+# Enviando apenas .agent permanentemente.

@@ -1,19 +1,21 @@
 :root {
-    --bg-color: #0d0d0d;
-    --card-bg: #1a1a1a;
-    --neon-blue: #00f2ff;
-    --neon-red: #ff004c;
-    --neon-yellow: #ffea00;
-    --text-color: #e0e0e0;
-    --tile-bg: #2d2d2d;
-    --tile-revealed: #3d3d3d;
-    --border-color: #444;
+    --bg-color: #080808;      /* Obsidian mais profundo */
+    --card-bg: #121212;      /* Cartão sutil */
+    --neon-blue: #00f2ff;    /* Ciano Futurista */
+    --neon-red: #ff004c;     /* Magenta Vibrante (P2) */
+    --neon-yellow: #fefe33;  /* Amarelo Neon */
+    --text-color: #ffffff;
+    --tile-bg: #1a1a1a;      /* Mais contraste vs revelado */
+    --tile-revealed: #282828; /* Mais nítido */
+    --border-color: #222;
+    --font-main: 'Inter', sans-serif;
+    --font-text: 'Syncopate', sans-serif;
 }
 
 body {
     background-color: var(--bg-color);
     color: var(--text-color);
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: var(--font-main);
     margin: 0;
     padding: 0;
     display: flex;
@@ -120,11 +122,16 @@ header {
     display: flex;
     justify-content: center;
     align-items: center;
-    font-weight: bold;
+    font-family: var(--font-main);
+    font-weight: 900; /* Extra bold para facilitar leitura */
     cursor: pointer;
-    font-size: 14px;
+    font-size: min(4vw, 24px); /* Tamanho de fonte dinâmico e GRANDE */
+    /* 
+    - [x] Importação de Fontes Premium (Inter e Syncopate) via Google Fonts
+    - [x] Implementação de Nova Paleta de Cores Neon (Variáveis CSS)
+    */
     user-select: none;
-    border-radius: 2px;
+    border-radius: 4px;
     transition: background-color 0.2s, box-shadow 0.2s, transform 0.1s;
     position: relative;
     overflow: hidden;
@@ -246,12 +253,28 @@ footer {
     outline: 3px solid white;
     outline-offset: -3px;
     z-index: 10;
-    animation: flash 1.5s infinite alternate;
+    animation: flash 1.5s infinite alternate, glow-pulse 1s infinite alternate;
 }
 
 @keyframes flash {
     from { opacity: 1; outline-color: white; }
     to { opacity: 0.7; outline-color: transparent; }
+}
+
+@keyframes glow-pulse {
+    from { box-shadow: 0 0 5px rgba(255,255,255,0.5); }
+    to { box-shadow: 0 0 15px rgba(255,255,255,0.8); }
+}
+
+/* Efeito de brilho nos números - Intensificado para contraste */
+.tile.revealed:not(.mine-p1):not(.mine-p2) {
+    text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 20px currentColor, 0 0 30px currentColor;
+    border: 1px solid rgba(255,255,255,0.15);
+    background-color: var(--tile-revealed);
+}
+
+.tile.revealed:active {
+    transform: scale(0.98);
 }
 
 .timer-container {

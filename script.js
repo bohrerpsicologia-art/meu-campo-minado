@@ -266,8 +266,6 @@ function countNeighborMines(r, c) {
 function updateScores() {
     score1Element.textContent = scores[0];
     score2Element.textContent = scores[1];
-
-    // Exemplo: if(window.database) window.database.saveScore(scores);
 }
 
 function updatePlayerPanels() {
@@ -276,7 +274,17 @@ function updatePlayerPanels() {
 }
 
 function getNumberColor(n) {
-    const colors = ['#000', '#0000FF', '#008000', '#FF0000', '#000080', '#800000', '#008080', '#000', '#808080'];
+    const colors = [
+        'transparent', 
+        '#bdffff', /* 1: Ciano Ultra Claro */
+        '#d5ffcf', /* 2: Verde Ultra Claro */
+        '#ffcfdf', /* 3: Magenta Claro */
+        '#e5cfff', /* 4: Roxo Claro */
+        '#ffffbd', /* 5: Amarelo Ultra Claro */
+        '#ffdfbd', /* 6: Laranja Claro */
+        '#bdffeb', /* 7: Turquesa Claro */
+        '#ffffff'  /* 8: Branco */
+    ];
     return colors[n] || 'white';
 }
 
@@ -439,12 +447,242 @@ function getLogicalMove() {
         }
     }
 
-    // Lógica Avançada (Padrão 1-2-1): Apenas para níveis 4 e 5
+    // Lógica Avançada (Padrão 1-2-1 e 1-1): Apenas para níveis 4 e 5
     if (difficulty >= 4) {
         const patternMove = getPatternMove();
         if (patternMove) return patternMove;
     }
 
+    // Lógica Suprema (Tank Algorithm / CSP): Exclusiva para o nível 5 (Gênio)
+    if (difficulty === 5) {
+        const tankMove = getTankMove();
+        if (tankMove) return tankMove;
+    }
+
+    return null;
+}
+
+/**
+ * TANK ALGORITHM - MOTOR DE SATISFAÇÃO DE RESTRIÇÕES (CSP)
+ * Divide o tabuleiro em regiões independentes e resolve permutações.
+ */
+function getTankMove() {
+    const startTime = performance.now();
+    
+    // 1. Identificar a Fronteira de Jogo
+    const frontierTiles = []; // Todos os ocultos que tocam em números
+    const numberTiles = [];   // Números revelados que tocam em ocultos
+    
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+            if (board[r][c].revealed && !board[r][c].isMine) {
+                const info = getTileLogicInfo(r, c);
+                if (info.hiddenNeighbors.length > 0) {
+                    numberTiles.push({r, c, ...info});
+                    info.hiddenNeighbors.forEach(h => {
+                        if (!frontierTiles.find(f => f.r === h.r && f.c === h.c)) {
+                            frontierTiles.push(h);
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    if (frontierTiles.length === 0) return null;
+
+    // - [x] Implementação do Particionamento de Regiões (Islands/Islands BFS)
+    // - [x] Criação do Motor de Backtracking (`solveTank`) com Poda Antecipada
+    // - [x] Algoritmo de Validação de Configurações contra Números Adjacentes
+    // - [/] Cálculo de Probabilidade Real (Frequência de Minas / Total de Combinações)
+    // - [ ] Integração no `machineMove` (Prioridade 100% -> Maior Probabilidade)
+    // - [ ] Adição de Logs de Performance e Raciocínio Matemática (`[Tank]`)
+
+    // 2. Particionamento em Regiões Independentes (Islands)
+    const segments = partitionFrontier(frontierTiles, numberTiles);
+    let allProbabilities = [];
+
+    // 3. Resolver cada Segmento via Backtracking
+    for (const segment of segments) {
+        // Trava de segurança para performance (max 25 células por ilha)
+        if (segment.tiles.length > 25) {
+            console.warn("[Tank] Segmento muito grande (" + segment.tiles.length + "), pulando...");
+            continue;
+        }
+
+        const solutions = solveSegment(segment.tiles, segment.numbers);
+        if (solutions.totalValidConfigurations > 0) {
+            for (let i = 0; i < segment.tiles.length; i++) {
+                const tile = segment.tiles[i];
+                const prob = solutions.mineCounts[i] / solutions.totalValidConfigurations;
+                allProbabilities.push({ r: tile.r, c: tile.c, p: prob });
+            }
+        }
+    }
+
+    const duration = performance.now() - startTime;
+    console.log(`[Tank] Processado em ${duration.toFixed(2)}ms. Candidatos: ${allProbabilities.length}`);
+
+    if (allProbabilities.length === 0) return null;
+
+    // 4. Tomada de Decisão do Flags (Maior Probabilidade primeiro)
+    allProbabilities.sort((a, b) => b.p - a.p);
+    
+    // Prioridade máxima: 100% de probabilidade (Bomba garantida)
+    const absoluteBombs = allProbabilities.filter(p => p.p > 0.999);
+    if (absoluteBombs.length > 0) {
+        return absoluteBombs[0];
+    }
+
+    // Se não houver 100%, pegar a maior probabilidade (Chute Matemático Real)
+    return allProbabilities[0];
+}
+
+function partitionFrontier(tiles, numbers) {
+    const segments = [];
+    const visited = new Set();
+
+    tiles.forEach((tile, index) => {
+        if (visited.has(index)) return;
+
+        const currentSegment = { tiles: [], numbers: [] };
+        const queue = [index];
+        visited.add(index);
+
+        while (queue.length > 0) {
+            const currentIdx = queue.shift();
+            const currentTile = tiles[currentIdx];
+            currentSegment.tiles.push(currentTile);
+
+            // Achar números que tocam este tile
+            const neighborNumbers = numbers.filter(n => 
+                Math.abs(n.r - currentTile.r) <= 1 && Math.abs(n.c - currentTile.c) <= 1
+            );
+
+            neighborNumbers.forEach(n => {
+                if (!currentSegment.numbers.includes(n)) {
+                    currentSegment.numbers.push(n);
+                }
+                
+                // Achar outros tiles que tocam este número
+                tiles.forEach((t, i) => {
+                    if (!visited.has(i) && Math.abs(t.r - n.r) <= 1 && Math.abs(t.c - n.c) <= 1) {
+                        visited.add(i);
+                        queue.push(i);
+                    }
+                });
+            });
+        }
+        segments.push(currentSegment);
+    });
+
+    return segments;
+}
+
+function solveSegment(tiles, numbers) {
+    const mineCounts = new Array(tiles.length).fill(0);
+    let totalValidConfigurations = 0;
+
+    function backtrack(index, config) {
+        if (index === tiles.length) {
+            // Verificar se todos os números estão satisfeitos por esta configuração
+            const isValid = numbers.every(n => {
+                let assignedMines = 0;
+                tiles.forEach((t, i) => {
+                    if (Math.abs(t.r - n.r) <= 1 && Math.abs(t.c - n.c) <= 1) {
+                        if (config[i] === 1) assignedMines++;
+                    }
+                });
+                return (assignedMines + n.revealedMines) === n.count;
+            });
+
+            if (isValid) {
+                totalValidConfigurations++;
+                config.forEach((val, i) => { if (val === 1) mineCounts[i]++; });
+            }
+            return;
+        }
+
+        // Tentar Estado 0 (Livre) e 1 (Mina) com Podas Prévias
+        [0, 1].forEach(value => {
+            config[index] = value;
+            
+            // PODA: Verificar se a atribuição atual já invalida algum número
+            const isPotential = numbers.every(n => {
+                let assignedMines = 0;
+                let potentialMines = 0;
+                tiles.forEach((t, i) => {
+                    if (Math.abs(t.r - n.r) <= 1 && Math.abs(t.c - n.c) <= 1) {
+                        if (i <= index) {
+                            if (config[i] === 1) assignedMines++;
+                        } else {
+                            potentialMines++;
+                        }
+                    }
+                });
+                const totalMines = assignedMines + n.revealedMines;
+                return totalMines <= n.count && (totalMines + potentialMines >= n.count);
+            });
+
+            if (isPotential) backtrack(index + 1, config);
+        });
+    }
+
+    backtrack(0, new Array(tiles.length).fill(0));
+    return { totalValidConfigurations, mineCounts };
+}
+
+function getAdvancedSetLogicMove() {
+    // A IA Gênio analisa a relação entre dois números vizinhos
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+            if (board[r][c].revealed && !board[r][c].isMine) {
+                const infoA = getTileLogicInfo(r, c);
+                if (infoA.hiddenNeighbors.length === 0) continue;
+
+                const minesNeededA = infoA.count - infoA.revealedMines;
+                const neighborsOfA = getNeighbors(r, c);
+
+                // Procurar por vizinhos de A que também sejam números revelados
+                for (const neighbor of neighborsOfA) {
+                    const nr = neighbor.r;
+                    const nc = neighbor.c;
+                    if (board[nr][nc].revealed && !board[nr][nc].isMine) {
+                        const infoB = getTileLogicInfo(nr, nc);
+                        if (infoB.hiddenNeighbors.length === 0) continue;
+                        
+                        const minesNeededB = infoB.count - infoB.revealedMines;
+
+                        // Comparar os conjuntos de vizinhos ocultos (Sa e Sb)
+                        const Sa = infoA.hiddenNeighbors;
+                        const Sb = infoB.hiddenNeighbors;
+                        
+                        // Verificar se Sb é um subconjunto de Sa
+                        const isSubset = Sb.every(b => Sa.some(a => a.r === b.r && a.c === b.c));
+
+                        if (isSubset && Sa.length > Sb.length) {
+                            const diff = Sa.filter(a => !Sb.some(b => b.r === a.r && b.c === a.c));
+                            
+                            const minesNeededA = infoA.count - infoA.revealedMines;
+                            const minesNeededB = infoB.count - infoB.revealedMines;
+
+                            // REGRA 1: Minas em A - Minas em B == Número de Células na Diferença -> Todas são BOMBAS
+                            if (minesNeededA - minesNeededB === diff.length) {
+                                console.log(`🧠 Gênio (SetLogic) deduziu BOMBA em: ${diff[0].r}, ${diff[0].c} baseado no vizinho ${nr},${nc}`);
+                                return diff[0];
+                            }
+                            
+                            // REGRA 2: Minas em A == Minas em B -> Todas as células na Diferença são SEGURAS
+                            if (minesNeededA === minesNeededB) {
+                                // Apenas registramos o conhecimento, mas não clicamos (para não perder o turno)
+                                console.log(`🧠 Gênio (SetLogic) identificou células SEGURAS em: ${diff[0].r}, ${diff[0].c} - Poupando turno.`);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     return null;
 }
 

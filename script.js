@@ -429,34 +429,30 @@ function getBestBombTarget() {
 }
 
 function getLogicalMove() {
-    // Procura por minas garantidas.
+    // Nível Gênio (5) usa exclusivamente o motor matemático Tank Algorithm (CSP)
+    // para garantir precisão absoluta e evitar falsas heurísticas.
+    if (difficulty === 5) {
+        return getTankMove();
+    }
+
+    // Procura por minas garantidas (Lógica de Nível 1 para dificuldades inferiores).
     for (let r = 0; r < BOARD_SIZE; r++) {
         for (let c = 0; c < BOARD_SIZE; c++) {
-            // Se a IA não estiver "prestando atenção" nesta célula, ela pula a análise lógica dela
-            if (!aiAttentionGrid[r][c] && difficulty < 5) continue;
+            if (!aiAttentionGrid[r][c] && difficulty < 4) continue;
 
             if (board[r][c].revealed && !board[r][c].isMine) {
                 const info = getTileLogicInfo(r, c);
-
-                // Lógica Fundamental: Vizinhos Ocultos + Minas Já Achadas == Número da Célula
                 if (info.hiddenNeighbors.length > 0 && (info.hiddenNeighbors.length + info.revealedMines === info.count)) {
-                    // IA Gênio nunca erra se notou a célula. Outros níveis podem hesitar.
                     return info.hiddenNeighbors[0];
                 }
             }
         }
     }
 
-    // Lógica Avançada (Padrão 1-2-1 e 1-1): Apenas para níveis 4 e 5
-    if (difficulty >= 4) {
+    // Lógica de Padrões (1-2-1, 1-1) para nível 4 (Muito Difícil)
+    if (difficulty === 4) {
         const patternMove = getPatternMove();
         if (patternMove) return patternMove;
-    }
-
-    // Lógica Suprema (Tank Algorithm / CSP): Exclusiva para o nível 5 (Gênio)
-    if (difficulty === 5) {
-        const tankMove = getTankMove();
-        if (tankMove) return tankMove;
     }
 
     return null;
@@ -490,13 +486,6 @@ function getTankMove() {
     }
 
     if (frontierTiles.length === 0) return null;
-
-    // - [x] Implementação do Particionamento de Regiões (Islands/Islands BFS)
-    // - [x] Criação do Motor de Backtracking (`solveTank`) com Poda Antecipada
-    // - [x] Algoritmo de Validação de Configurações contra Números Adjacentes
-    // - [/] Cálculo de Probabilidade Real (Frequência de Minas / Total de Combinações)
-    // - [ ] Integração no `machineMove` (Prioridade 100% -> Maior Probabilidade)
-    // - [ ] Adição de Logs de Performance e Raciocínio Matemática (`[Tank]`)
 
     // 2. Particionamento em Regiões Independentes (Islands)
     const segments = partitionFrontier(frontierTiles, numberTiles);
